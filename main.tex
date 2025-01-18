@@ -3,6 +3,8 @@
 \documentclass[a4paper,11pt,uplatex]{jsarticle}%titlepage
 %:/usr/local/texlive/texmf-local/tex/latex/report/report.sty
 \usepackage{myreport}
+\DeclareMathOperator*{\argmin}{argmin}
+\DeclareMathOperator*{\argmax}{argmax} 
 \title{VAEでギブスサンプラーを作る}
 \author{20B01392 松本侑真}
 \date{\today}
@@ -14,7 +16,69 @@
 \tableofcontents
 \newpage
 
+\section{文字の定義}
+\begin{itemize}
+    \item $x$：入力データ
+    \item $z$：潜在変数
+    \item $\mu(x)$：入力データが従う確率分布
+    \item $q_{\theta}(x)$：生成されるデータが従う確率分布
+    \item $\pi(z)$：潜在変数が従う確率分布
+    \item $Q_{\theta}(x|z)$：デコーダのモデル
+    \item $P_{\phi}(z|x)$：エンコーダのモデル
+    \item $Q_{\theta}(x,z)$：デコーダ側の同時分布
+    \item $P_{\phi}(x,z)$：エンコーダー側の同時分布
+\end{itemize}
+入力データはギブス分布に従い、潜在変数は$d$次元の標準正規分布に従う：
+\begin{align}
+  \mu(x) &= \frac{1}{Z} \exp(-U(x))\;, \\
+  \pi(z) &= \mathcal{N}(z;0,I_d)\;。
+\end{align}
+エンコーダとデコーダは以下のようにモデル化している：
+\begin{align}
+  P_{\phi}(z|x) = \mathcal{N}(z;\mu_{\phi}(x),\Sigma_{\phi}(x))\;, \\
+  Q_{\theta}(x|z) = p_{D}(x;\mu_{\theta}(z),\Sigma_{\theta}(z))\;。
+\end{align}
+\subsection{VAEのKL Divergenceの上界}
+KL Divergenceの左側に生成されるデータ、右側に入力データの分布を置くことに注意する。
+入力データはギブス分布に従うため、
+\begin{equation}
+  \mathbb{E}_{\pi(z)Q_{\theta}(x|z)}[\log{\mu(x)}] = \mathbb{E}_{\pi(z)Q_{\theta}(x|z)}[\log{(Z^{-1}e^{-U(x)})}]
+  = \log{Z^{-1}} - \mathbb{E}_{Q_{\theta}(x|z)}[U(x)]
+\end{equation}
+と計算されることを用いると、VAEの拡張の元で上界は以下のように計算される：
+\begin{align}
+  D_{\text{KL}}(q_{\theta}(x)||\mu(x)) &\leq D_{\text{KL}}(Q_{\theta}(x,z) || P_{\phi}(x,z)) = D_{\text{KL}}(\pi(z)Q_{\theta}(x|z) || \mu(x)P_{\phi}(z|x)) \notag \\
+  &= \mathbb{E}_{Q_{\theta}(x|z)\pi(z)}\qty[\log\frac{Q_{\theta}(x|z)\pi(z)}{P_{\phi}(z|x)}] + \mathbb{E}_{Q_{\theta}(x|z)}[U(x)] - \log{Z^{-1}} \notag \\
+\end{align}
+定数部分を無視して右辺は以下のように計算される：
+\begin{equation}
+  \mathbb{E}_{Q_{\theta}(x|z)}\qty[D_{\text{KL}}(\pi(z)||P_{\theta}(z|x))] + \mathbb{E}_{Q_{\theta}(x|z)\pi(z)}[\log{Q_{\theta}(x|z)} + U(x)]\;。
+\end{equation}
+したがって、KLの上界最小化問題は
+\begin{align*}
+  \argmin_{\theta,\phi} D_{\text{KL}}(Q_{\theta}(x,z) || P_{\phi}(x,z))
+  = \argmin_{\theta,\phi}\qty{\mathbb{E}_{Q_{\theta}(x|z)}\qty[D_{\text{KL}}(\pi(z)||P_{\phi}(z|x))] + \mathbb{E}_{Q_{\theta}(x|z)\pi(z)}[\log{Q_{\theta}(x|z)} + U(x)]}
+\end{align*}
+となる。
 
+第一項目はガウス分布同士のKL Divergenceであるため計算が進められる：
+\begin{align}
+  D_{\text{KL}}(\pi(z)||P_{\phi}(z|x)) &= D_{\text{KL}}(\mathcal{N}(z;0,I_d) || \mathcal{N}(z;\mu_{\phi}(x),\sigma_{\phi}^{2}(x)I_d)) \notag \\ 
+  &= \frac{1}{2}\qty[\log{\sigma_{\phi}(x)^2} - d + \frac{d}{\sigma_{\phi}(x)^2} + \frac{\abs{\mu_{\phi}(x)}^2}{\sigma_{\phi}(x)^2}]\;。
+\end{align}
 
+\section{Appendix}
+\subsection{ガウス分布同士のKL Divergence}
+ガウス分布同士のKL Divergenceは以下のように計算される：
+\begin{equation}
+  D_{\text{KL}}(\mathcal{N}(x;\mu_x,\Sigma_x)||\mathcal{N}(y;\mu_y,\Sigma_y)) 
+  = \frac{1}{2}\qty[\log{\frac{|\Sigma_y|}{|\Sigma_x|}} - d + \Trace(\Sigma_y^{-1}\Sigma_x) + (\mu_y - \mu_x)^{\top}\Sigma_y^{-1}(\mu_y - \mu_x)]
+\end{equation}
+とくに、共分散行列が対角行列で表される場合、
+\begin{equation}
+  D_{\text{KL}}(\mathcal{N}(x;\mu_x,\sigma_x^{2}I_d)||\mathcal{N}(y;\mu_y,\sigma_y^2I_d))
+  =  \frac{1}{2}\qty[\log{\frac{\sigma_y^2}{\sigma_x^2}} - d + \frac{\sigma_x^2}{\sigma_y^2}d + \frac{1}{\sigma_y^2}\abs{\mu_y - \mu_x}^2]
+\end{equation}
+と計算される。
 
 \end{document}
